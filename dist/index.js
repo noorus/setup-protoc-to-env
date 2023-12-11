@@ -89,10 +89,10 @@ function getProtoc(version, includePreReleases, repoToken) {
         core.setOutput("path", toolPath);
         core.setOutput("version", targetVersion);
         if (process.platform === "win32") {
-            core.exportVariable("PROTOC", toolPath + "\\" + "protoc.exe");
+            core.exportVariable("PROTOC", toolPath + "\\bin\\protoc.exe");
         }
         else {
-            core.exportVariable("PROTOC", toolPath + "/" + "protoc");
+            core.exportVariable("PROTOC", toolPath + "/bin/protoc");
         }
         // add the bin folder to the PATH
         core.addPath(path.join(toolPath, "bin"));
