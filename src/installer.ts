@@ -66,7 +66,11 @@ export async function getProtoc(
   // expose outputs
   core.setOutput("path", toolPath);
   core.setOutput("version", targetVersion);
-  core.exportVariable("PROTOC", toolPath);
+  if (process.platform === "win32") {
+    core.exportVariable("PROTOC", toolPath + "\\" + "protoc.exe");
+  } else {
+    core.exportVariable("PROTOC", toolPath + "/" + "protoc");
+  }
 
   // add the bin folder to the PATH
   core.addPath(path.join(toolPath, "bin"));
