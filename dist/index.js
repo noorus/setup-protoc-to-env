@@ -88,6 +88,7 @@ function getProtoc(version, includePreReleases, repoToken) {
         // expose outputs
         core.setOutput("path", toolPath);
         core.setOutput("version", targetVersion);
+        core.exportVariable("PROTOC", toolPath);
         // add the bin folder to the PATH
         core.addPath(path.join(toolPath, "bin"));
     });
