@@ -28,29 +28,10 @@ import * as tc from "@actions/tool-cache";
 const osPlat: string = os.platform();
 const osArch: string = os.arch();
 
-// This regex is slighty modified from https://semver.org/ to allow only MINOR.PATCH notation.
-const semverRegex =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/gm;
-
-interface IProtocRelease {
-  tag_name: string;
-  prerelease: boolean;
-}
-
 export async function getProtoc(
-  version: string,
-  includePreReleases: boolean,
-  repoToken: string
+  tagname: string,
+  version: string
 ) {
-  // resolve the version number
-  const targetVersion = await computeVersion(
-    version,
-    includePreReleases,
-    repoToken
-  );
-  if (targetVersion) {
-    version = targetVersion;
-  }
   process.stdout.write("Getting protoc version: " + version + os.EOL);
 
   // look if the binary is cached
@@ -59,7 +40,7 @@ export async function getProtoc(
 
   // if not: download, extract and cache
   if (!toolPath) {
-    toolPath = await downloadRelease(version);
+    toolPath = await downloadRelease(tagname, version);
     process.stdout.write("Protoc cached under " + toolPath + os.EOL);
   }
 
@@ -76,12 +57,12 @@ export async function getProtoc(
   core.addPath(path.join(toolPath, "bin"));
 }
 
-async function downloadRelease(version: string): Promise<string> {
+async function downloadRelease(tagname: string, version: string): Promise<string> {
   // Download
   const fileName: string = getFileName(version, osPlat, osArch);
   const downloadUrl: string = util.format(
     "https://github.com/protocolbuffers/protobuf/releases/download/%s/%s",
-    version,
+    tagname,
     fileName
   );
   process.stdout.write("Downloading archive: " + downloadUrl + os.EOL);
@@ -148,12 +129,8 @@ export function getFileName(
   osPlatf: string,
   osArc: string
 ): string {
-  // to compose the file name, strip the leading `v` char
-  if (version.startsWith("v")) {
-    version = version.slice(1, version.length);
-  }
   // in case is a rc release we add the `-`
-  if (version.includes("rc")) {
+  if (!version.includes("rc-") && version.includes("rc")) {
     version = version.replace("rc", "rc-");
   }
 
@@ -170,111 +147,4 @@ export function getFileName(
   }
 
   return util.format("protoc-%s-linux-%s.zip", version, suffix);
-}
-
-// Retrieve a list of versions scraping tags from the Github API
-async function fetchVersions(
-  includePreReleases: boolean,
-  repoToken: string
-): Promise<string[]> {
-  let rest: restm.RestClient;
-  if (repoToken != "") {
-    rest = new restm.RestClient("setup-protoc", "", [], {
-      headers: { Authorization: "Bearer " + repoToken },
-    });
-  } else {
-    rest = new restm.RestClient("setup-protoc");
-  }
-
-  let tags: IProtocRelease[] = [];
-  for (let pageNum = 1, morePages = true; morePages; pageNum++) {
-    const p = await rest.get<IProtocRelease[]>(
-      "https://api.github.com/repos/protocolbuffers/protobuf/releases?page=" +
-        pageNum
-    );
-    const nextPage: IProtocRelease[] = p.result || [];
-    if (nextPage.length > 0) {
-      tags = tags.concat(nextPage);
-    } else {
-      morePages = false;
-    }
-  }
-
-  return tags
-    .filter((tag) => tag.tag_name.match(/v\d+\.[\w.]+/g))
-    .filter((tag) => includePrerelease(tag.prerelease, includePreReleases))
-    .map((tag) => tag.tag_name.replace("v", ""));
-}
-
-// Compute an actual version starting from the `version` configuration param.
-async function computeVersion(
-  version: string,
-  includePreReleases: boolean,
-  repoToken: string
-): Promise<string> {
-  // strip leading `v` char (will be re-added later)
-  if (version.startsWith("v")) {
-    version = version.slice(1, version.length);
-  }
-
-  // strip trailing .x chars
-  if (version.endsWith(".x")) {
-    version = version.slice(0, version.length - 2);
-  }
-
-  const allVersions = await fetchVersions(includePreReleases, repoToken);
-  const validVersions = allVersions.filter((v) => v.match(semverRegex));
-  const possibleVersions = validVersions.filter((v) => v.startsWith(version));
-
-  const versionMap = new Map();
-  possibleVersions.forEach((v) => versionMap.set(normalizeVersion(v), v));
-
-  const versions = Array.from(versionMap.keys())
-    .sort(semver.rcompare)
-    .map((v) => versionMap.get(v));
-
-  core.debug(`evaluating ${versions.length} versions`);
-
-  if (versions.length === 0) {
-    throw new Error("unable to get latest version");
-  }
-
-  core.debug(`matched: ${versions[0]}`);
-
-  return "v" + versions[0];
-}
-
-// Make partial versions semver compliant.
-function normalizeVersion(version: string): string {
-  const preStrings = ["rc"];
-
-  const versionPart = version.split(".");
-  // drop invalid
-  if (versionPart[1] == null) {
-    //append minor and patch version if not available
-    // e.g. 23 -> 23.0.0
-    return version.concat(".0.0");
-  } else {
-    // handle beta and rc
-    // e.g. 23.0-rc1 -> 23.0.0-rc1
-    if (preStrings.some((el) => versionPart[1].includes(el))) {
-      versionPart[1] = versionPart[1].replace("-rc", ".0-rc");
-      return versionPart.join(".");
-    }
-  }
-
-  if (versionPart[2] == null) {
-    //append patch version if not available
-    // e.g. 23.1 -> 23.1.0
-    return version.concat(".0");
-  }
-
-  return version;
-}
-
-function includePrerelease(
-  isPrerelease: boolean,
-  includePrereleases: boolean
-): boolean {
-  return includePrereleases || !isPrerelease;
 }
