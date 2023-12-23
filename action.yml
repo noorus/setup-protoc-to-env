@@ -2,15 +2,12 @@ name: 'Setup protoc to env'
 description: 'Download protoc compiler and add it to the PATH and PROTOC'
 author: 'Arduino'
 inputs:
+  tagname:
+    description: 'Explicit release tagname to use. Example: v3.20.2'
+    default: 'v3.20.2'
   version:
-    description: 'Version to use. Example: 23.2'
-    default: '23.x'
-  include-pre-releases:
-    description: 'Include github pre-releases in latest version calculation'
-    default: 'false'
-  repo-token:
-    description: 'GitHub repo token to use to avoid rate limiter'
-    default: ''
+    description: 'Explicit version to use. Example: 3.20.2'
+    default: '3.20.2'
 outputs:
   version:
     description: 'Actual version of the protoc compiler environment that has been installed'
