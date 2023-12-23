@@ -3,9 +3,9 @@ import * as installer from "./installer";
 
 async function run() {
   try {
+    const tagname = core.getInput("tagname");
     const version = core.getInput("version");
-    const repoToken = core.getInput("repo-token");
-    await installer.getProtoc(version, repoToken);
+    await installer.getProtoc(tagname, version);
   } catch (error) {
     core.setFailed(`${error}`);
   }
